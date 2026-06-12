@@ -1,0 +1,21 @@
+{
+  "name": "CRONOMAX-NC",
+  "short_name": "CRONOMAX",
+  "description": "Gestione Non Conformità per reparti produttivi",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#f8fafc",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
