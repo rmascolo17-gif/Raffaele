@@ -1,5 +1,5 @@
 {
-  "name": "CRONOMAX-NC",
+  "name": "CHRONO-RA",
   "description": "Applicativo per il monitoraggio, l'analisi statistica e la generazione automatica tramite AI dei report sulle non conformita aziendali.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

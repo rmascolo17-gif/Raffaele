@@ -15,6 +15,7 @@ export interface NonConformita {
   costo: number;
   persona: string;
   responsabile: string;
+  reparti_costi?: Record<string, number>; // Associazione costi per ciascun reparto della NC
   note?: string; // Spiegazione di cosa è successo
 }
 

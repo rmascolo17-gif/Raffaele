@@ -86,15 +86,15 @@ export default function App() {
   });
   const [formDataChiusura, setFormDataChiusura] = useState("");
   
-  // Stato per gestione di molteplici reparti per la medesima NC
-  const [formReparti, setFormReparti] = useState<{ id: string; value: string; isCustom: boolean }[]>([
-    { id: "dept-init", value: REPARTI_PREDEFINITI[0], isCustom: false }
+  // Stato per gestione di molteplici reparti per la medesima NC con relativi costi
+  const [formReparti, setFormReparti] = useState<{ id: string; value: string; isCustom: boolean; costo: number }[]>([
+    { id: "dept-init", value: REPARTI_PREDEFINITI[0], isCustom: false, costo: 0 }
   ]);
 
   const handleAddRepartoField = () => {
     setFormReparti(prev => [
       ...prev,
-      { id: "dept-" + Date.now() + "-" + Math.random(), value: REPARTI_PREDEFINITI[0], isCustom: false }
+      { id: "dept-" + Date.now() + "-" + Math.random(), value: REPARTI_PREDEFINITI[0], isCustom: false, costo: 0 }
     ]);
   };
 
@@ -104,9 +104,14 @@ export default function App() {
     }
   };
 
-  const handleUpdateRepartoField = (id: string, updates: Partial<{ value: string; isCustom: boolean }>) => {
+  const handleUpdateRepartoField = (id: string, updates: Partial<{ value: string; isCustom: boolean; costo: number }>) => {
     setFormReparti(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
   };
+
+  // Calcolo automatico del costo totale nel form di aggiunta in base ai singoli reparti
+  const calculatedTotalFormCosto = useMemo(() => {
+    return formReparti.reduce((sum, item) => sum + (Number(item.costo) || 0), 0);
+  }, [formReparti]);
 
   const [formCausa, setFormCausa] = useState(CAUSE_PREDEFINITE[0]);
   const [formCausaCustomOpen, setFormCausaCustomOpen] = useState(false);
@@ -180,6 +185,22 @@ export default function App() {
     return nc.reparto.split(",").map(r => r.trim()).filter(Boolean);
   };
 
+  // Helper per ottenere il costo specifico associato a un reparto per una NC
+  const getRepartoCosto = (nc: NonConformita, dept: string): number => {
+    if (nc.reparti_costi && nc.reparti_costi[dept] !== undefined) {
+      return Number(nc.reparti_costi[dept]) || 0;
+    }
+    // Fallback automatico per i dati storici
+    const reps = getReparti(nc);
+    if (reps.includes(dept)) {
+      if (reps.length <= 1) {
+        return Number(nc.costo) || 0;
+      }
+      return Number((Number(nc.costo) || 0) / reps.length);
+    }
+    return 0;
+  };
+
   // Elenco completo e dinamico dei reparti esistenti nel DB
   const dynamicDepartments = useMemo(() => {
     const deptsInDb = ncs.flatMap(nc => getReparti(nc));
@@ -247,7 +268,7 @@ export default function App() {
     return dynamicDepartments.map(dept => {
       const deptNCs = filteredNCs.filter(nc => getReparti(nc).includes(dept));
       const count = deptNCs.length;
-      const cost = deptNCs.reduce((sum, item) => sum + (Number(item.costo) || 0), 0);
+      const cost = deptNCs.reduce((sum, item) => sum + getRepartoCosto(item, dept), 0);
       return {
         name: dept,
         count: count,
@@ -507,7 +528,7 @@ export default function App() {
       columns.forEach(dept => {
         const deptAndMonthNCs = monthNCs.filter(nc => getReparti(nc).includes(dept));
         const count = deptAndMonthNCs.length;
-        const cost = deptAndMonthNCs.reduce((sum, item) => sum + (Number(item.costo) || 0), 0);
+        const cost = deptAndMonthNCs.reduce((sum, item) => sum + getRepartoCosto(item, dept), 0);
 
         cellDetails[dept] = { count, cost };
 
@@ -592,6 +613,14 @@ export default function App() {
       return;
     }
 
+    const repartiCostiMap: Record<string, number> = {};
+    formReparti.forEach(item => {
+      const name = item.value.trim();
+      if (name) {
+        repartiCostiMap[name] = Number(item.costo) || 0;
+      }
+    });
+
     const newNC: NonConformita = {
       id: "nc-dyn-" + Date.now(),
       commessa: formCommessa.trim(),
@@ -602,9 +631,10 @@ export default function App() {
       data_chiusura: formDataChiusura || "",
       reparto: finalRepartiList.join(", "),
       causa: finalCausa,
-      costo: Number(formCosto) || 0,
+      costo: calculatedTotalFormCosto,
       persona: formPersona.trim() || "N/D",
       responsabile: formResponsabile.trim() || "N/D",
+      reparti_costi: repartiCostiMap,
       note: formNote.trim()
     };
 
@@ -620,7 +650,7 @@ export default function App() {
     setFormNote("");
     setFormDataChiusura("");
     setFormReparti([
-      { id: "dept-reset-" + Date.now(), value: REPARTI_PREDEFINITI[0], isCustom: false }
+      { id: "dept-reset-" + Date.now(), value: REPARTI_PREDEFINITI[0], isCustom: false, costo: 0 }
     ]);
     setFormCausaCustomOpen(false);
     setFormCausaCustomValue("");
@@ -754,11 +784,22 @@ export default function App() {
       
       {/* HEADER PRINCIPALE */}
       <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-40 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center shrink-0">
-            <div className="w-4 h-4 border-2 border-white rotate-45"></div>
+        <div className="flex items-center gap-3 select-none">
+          <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-blue-600 rounded-lg flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/15 transition-all hover:scale-105 duration-200">
+            <svg className="w-5.5 h-5.5 text-white drop-shadow-xs" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              {/* Piramide 3D rivolta verso l'alto */}
+              <path d="M12 3L4 18L12 15.5Z" fill="rgba(255, 255, 255, 0.98)" />
+              <path d="M12 3L20 18L12 15.5Z" fill="rgba(255, 255, 255, 0.72)" />
+            </svg>
           </div>
-          <span className="text-xl font-bold tracking-tight">CRONOMAX <span className="text-slate-400 font-light">NC</span></span>
+          <div className="flex flex-col">
+            <span className="text-md sm:text-lg font-black tracking-wider bg-gradient-to-r from-violet-600 to-blue-600 bg-clip-text text-transparent uppercase leading-none">
+              CHRONO-RA
+            </span>
+            <span className="text-[9px] text-slate-400 font-extrabold tracking-widest uppercase mt-0.5">
+              Quality Hub
+            </span>
+          </div>
         </div>
         
         <div className="flex gap-4 text-sm font-medium items-center">
@@ -887,19 +928,6 @@ export default function App() {
           >
             <Table2 className="w-3.5 h-3.5" />
             Inserimento Dati & Matrice
-          </button>
-
-          <button
-            onClick={() => setActiveTab("ai")}
-            className={`px-4 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-2 ${
-              activeTab === "ai"
-                ? "bg-white text-blue-600 shadow-xs"
-                : "text-slate-600 hover:text-slate-900 hover:bg-white/40"
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5 text-red-500" />
-            Report AI Gemini
-            <span className="bg-red-50 text-red-700 text-[9px] px-1.5 py-0.2 rounded-sm font-bold font-mono">AI</span>
           </button>
 
           <button
@@ -1197,52 +1225,73 @@ export default function App() {
 
                     <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
                       {formReparti.map((field, idx) => (
-                        <div key={field.id} className="flex items-center gap-2 p-2 bg-slate-50/85 rounded-lg border border-slate-150">
-                          <span className="text-[10px] font-bold text-slate-400 min-w-[20px]">
-                            {idx + 1}°
-                          </span>
-                          
-                          <div className="flex-1 flex gap-2">
-                            {field.isCustom ? (
-                              <input 
-                                type="text" 
-                                required
-                                value={field.value}
-                                onChange={(e) => handleUpdateRepartoField(field.id, { value: e.target.value })}
-                                placeholder="Scrivi nome reparto..."
-                                className="flex-1 border border-blue-200 bg-white rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-medium text-slate-800"
-                              />
-                            ) : (
-                              <select
-                                value={field.value}
-                                onChange={(e) => handleUpdateRepartoField(field.id, { value: e.target.value })}
-                                className="flex-1 border border-slate-200 bg-white rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-semibold text-slate-800"
-                              >
-                                {REPARTI_PREDEFINITI.map((dept) => (
-                                  <option key={dept} value={dept}>{dept}</option>
-                                ))}
-                              </select>
-                            )}
-
+                        <div key={field.id} className="flex flex-col gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg shadow-2xs">
+                          <div className="flex items-center justify-between border-b border-slate-150 pb-1 mb-0.5">
+                            <span className="text-[10px] font-bold text-slate-400">
+                              {idx + 1}° Reparto
+                            </span>
                             <button
                               type="button"
                               onClick={() => handleUpdateRepartoField(field.id, { isCustom: !field.isCustom, value: field.isCustom ? REPARTI_PREDEFINITI[0] : "" })}
-                              className="text-[10px] text-blue-600 font-bold hover:underline self-center px-1"
+                              className="text-[10px] text-blue-600 font-bold hover:underline"
                             >
-                              {field.isCustom ? "Predefinito" : "A mano"}
+                              {field.isCustom ? "Cambia in predefinito" : "Scrivi a mano"}
                             </button>
                           </div>
 
-                          {formReparti.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveRepartoField(field.id)}
-                              className="p-1.5 hover:bg-rose-100 hover:text-rose-600 text-slate-400 rounded-md transition-colors"
-                              title="Rimuovi questo reparto"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {/* Nome Reparto */}
+                            <div>
+                              {field.isCustom ? (
+                                <input 
+                                  type="text" 
+                                  required
+                                  value={field.value}
+                                  onChange={(e) => handleUpdateRepartoField(field.id, { value: e.target.value })}
+                                  placeholder="Scrivi nome reparto..."
+                                  className="w-full border border-blue-200 bg-white rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-medium text-slate-800"
+                                />
+                              ) : (
+                                <select
+                                  value={field.value}
+                                  onChange={(e) => handleUpdateRepartoField(field.id, { value: e.target.value })}
+                                  className="w-full border border-slate-200 bg-white rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-semibold text-slate-800 cursor-pointer"
+                                >
+                                  {REPARTI_PREDEFINITI.map((dept) => (
+                                    <option key={dept} value={dept}>{dept}</option>
+                                  ))}
+                                </select>
+                              )}
+                            </div>
+
+                            {/* Costo Reparto */}
+                            <div className="flex items-center gap-1.5">
+                              <div className="relative flex-1">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">€</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  required
+                                  value={field.costo !== undefined ? field.costo : 0}
+                                  onChange={(e) => handleUpdateRepartoField(field.id, { costo: Number(e.target.value) || 0 })}
+                                  placeholder="Costo reparto..."
+                                  className="w-full border border-slate-200 bg-white rounded-lg text-xs pl-6 pr-2 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-semibold font-mono text-slate-800"
+                                />
+                              </div>
+
+                              {formReparti.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveRepartoField(field.id)}
+                                  className="p-1.5 hover:bg-rose-100 hover:text-rose-600 text-slate-400 rounded-md transition-colors cursor-pointer"
+                                  title="Rimuovi questo reparto"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1304,17 +1353,19 @@ export default function App() {
                   {/* Costo, Persona & Responsabile */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Costo Non Conformità (€)
+                      Costo Totale Non Conformità (€)
                     </label>
                     <input 
                       type="number" 
-                      min="0" 
-                      step="0.01" 
-                      value={formCosto || ""}
-                      onChange={(e) => setFormCosto(Number(e.target.value))}
+                      readOnly
+                      disabled
+                      value={calculatedTotalFormCosto.toFixed(2)}
                       placeholder="0.00"
-                      className="w-full border border-slate-200 rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 font-mono focus:outline-hidden"
+                      className="w-full border border-slate-200 bg-slate-100 rounded-lg text-xs px-2.5 py-1.5 font-mono text-slate-500 focus:outline-hidden select-none cursor-not-allowed"
                     />
+                    <p className="text-[10px] text-slate-400 mt-1 italic">
+                      Calcolato automaticamente sommando i costi dei singoli reparti aggiunti sopra
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
@@ -1562,136 +1613,6 @@ export default function App() {
                   </table>
                 </div>
               </div>
-
-            </motion.div>
-          )}
-
-          {/* TAB 3: REPORT AUTOMATICO GEMINI */}
-          {activeTab === "ai" && (
-            <motion.div
-              key="ai"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-6"
-            >
-              
-              <div className="bg-white p-6 border border-slate-200">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-100 pb-5 mb-5">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2.5 bg-red-50 text-red-600 rounded">
-                      <FileText className="w-6 h-6 animate-pulse" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-slate-900">
-                        Generatore Report Qualità AI
-                      </h3>
-                      <p className="text-xs text-slate-400 font-medium">
-                        Rielaborazione statistica basata su Gemini 3.5 Flash e indicizzazione predittiva
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
-                      Periodo attivo per l'AI:
-                    </span>
-                    <span className="bg-slate-100 text-slate-800 font-bold text-xs px-2.5 py-1 rounded-lg border border-slate-200">
-                      {selectedMonth === "all" ? "Tutto l'anno" : MESI_LIST.find(m => m.id === selectedMonth)?.nome} {selectedYear} ({filteredNCs.length} record)
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-2">
-                      Istruzioni Addizionali / Focus d'Analisi (Opzionale)
-                    </label>
-                    <textarea
-                      placeholder="Es: Concentrati sull'errore sistematico del reparto CNC, oppure suggerisci azioni per ridurre i reclami esterni del cliente Ferrari..."
-                      value={aiCustomPrompt}
-                      onChange={(e) => setAiCustomPrompt(e.target.value)}
-                      rows={3}
-                      className="w-full border border-slate-200 rounded-xl text-xs p-3 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleGenerateAiReport}
-                    disabled={aiReportLoading}
-                    className="bg-red-650 bg-slate-900 hover:bg-slate-800 transition-colors shadow-xs text-white font-bold text-xs px-5 py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {aiReportLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" /> Generazione in corso con l'AI...
-                      </>
-                    ) : (
-                      <>
-                        <SparklesIcon className="w-4 h-4 text-yellow-400" /> Genera Report Qualità Automatizzato
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* STATO DI CARICAMENTO AI */}
-              {aiReportLoading && (
-                <div className="bg-white p-12 text-center border border-slate-200 flex flex-col items-center justify-center space-y-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-blue-100 border-t-slate-900 rounded-full animate-spin"></div>
-                    <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                      <FileText className="w-6 h-6 text-slate-900" />
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <p className="font-bold text-slate-800 text-sm">Gemini sta analizzando le {filteredNCs.length} Non Conformità...</p>
-                    <p className="text-xs text-slate-400 h-5 italic select-none">
-                      &ldquo;{reassuringMessages[aiMessageIndex]}&rdquo;
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* RISULTATO REPORT */}
-              {aiReport && !aiReportLoading && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white border border-slate-200 overflow-hidden"
-                >
-                  <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <FileCheck className="w-5 h-5 text-emerald-400" />
-                      <h4 className="text-sm font-bold text-white tracking-wide">Report di Qualità Predittivo AI Completato</h4>
-                    </div>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(aiReport);
-                        alert("Report Markdown copiato negli appunti!");
-                      }}
-                      className="text-[10px] text-blue-400 hover:text-white font-semibold flex items-center gap-1 hover:underline"
-                    >
-                      Copia negli Appunti
-                    </button>
-                  </div>
-                  
-                  <div className="p-8 prose prose-slate max-w-none prose-sm text-slate-800 overflow-y-auto">
-                    <div className="markdown-body">
-                      <ReactMarkdown>{aiReport}</ReactMarkdown>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-
-              {/* ERRORI */}
-              {aiError && (
-                <div className="p-4 bg-red-50 text-red-800 border-l-4 border-red-500 rounded-lg text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 transition-all text-red-650" />
-                  <p className="font-medium">{aiError}</p>
-                </div>
-              )}
 
             </motion.div>
           )}
@@ -2602,22 +2523,31 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
   const [tipoNc, setTipoNc] = useState(nc.tipo_nc);
   const [dataApertura, setDataApertura] = useState(nc.data_apertura);
   const [dataChiusura, setDataChiusura] = useState(nc.data_chiusura || "");
-  const [modalReparti, setModalReparti] = useState<{ id: string; value: string; isCustom: boolean }[]>(() => {
+  const [modalReparti, setModalReparti] = useState<{ id: string; value: string; isCustom: boolean; costo: number }[]>(() => {
     const list = nc.reparto ? nc.reparto.split(",").map(r => r.trim()).filter(Boolean) : [];
     if (list.length === 0) {
-      return [{ id: "m-dept-0", value: REPARTI_PREDEFINITI[0], isCustom: false }];
+      return [{ id: "m-dept-0", value: REPARTI_PREDEFINITI[0], isCustom: false, costo: Number(nc.costo) || 0 }];
     }
-    return list.map((val, idx) => ({
-      id: `m-dept-${idx}`,
-      value: val,
-      isCustom: !REPARTI_PREDEFINITI.includes(val)
-    }));
+    return list.map((val, idx) => {
+      let deptCosto = 0;
+      if (nc.reparti_costi && nc.reparti_costi[val] !== undefined) {
+        deptCosto = nc.reparti_costi[val];
+      } else {
+        deptCosto = list.length <= 1 ? (Number(nc.costo) || 0) : ((Number(nc.costo) || 0) / list.length);
+      }
+      return {
+        id: `m-dept-${idx}`,
+        value: val,
+        isCustom: !REPARTI_PREDEFINITI.includes(val),
+        costo: Number(deptCosto.toFixed(2))
+      };
+    });
   });
 
   const handleAddModuleReparto = () => {
     setModalReparti(prev => [
       ...prev,
-      { id: `m-dept-${Date.now()}-${Math.random()}`, value: REPARTI_PREDEFINITI[0], isCustom: false }
+      { id: `m-dept-${Date.now()}-${Math.random()}`, value: REPARTI_PREDEFINITI[0], isCustom: false, costo: 0 }
     ]);
   };
 
@@ -2627,9 +2557,13 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
     }
   };
 
-  const handleUpdateModuleReparto = (id: string, updates: Partial<{ value: string; isCustom: boolean }>) => {
+  const handleUpdateModuleReparto = (id: string, updates: Partial<{ value: string; isCustom: boolean; costo: number }>) => {
     setModalReparti(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
   };
+
+  const calculatedTotalModalCosto = useMemo(() => {
+    return modalReparti.reduce((sum, item) => sum + (Number(item.costo) || 0), 0);
+  }, [modalReparti]);
 
   const [causa, setCausa] = useState(nc.causa);
   const [costo, setCosto] = useState(nc.costo);
@@ -2647,6 +2581,14 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
       return;
     }
 
+    const repartiCostiMap: Record<string, number> = {};
+    modalReparti.forEach(item => {
+      const name = item.value.trim();
+      if (name) {
+        repartiCostiMap[name] = Number(item.costo) || 0;
+      }
+    });
+
     onSave({
       ...nc,
       commessa: commessa.trim(),
@@ -2656,8 +2598,9 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
       data_apertura: dataApertura,
       data_chiusura: dataChiusura,
       reparto: finalRepartiList.join(", "),
+      reparti_costi: repartiCostiMap,
       causa: causa.trim(),
-      costo: Number(costo) || 0,
+      costo: calculatedTotalModalCosto,
       persona: persona.trim() || "N/D",
       responsabile: responsabile.trim() || "N/D",
       note: note.trim()
@@ -2792,54 +2735,75 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
                 {modalReparti.map((field, idx) => (
-                  <div key={field.id} className="flex items-center gap-1.5 p-1.5 bg-slate-50 rounded-lg border border-slate-200">
-                    <span className="text-[10px] font-bold text-slate-400">
-                      {idx + 1}°
-                    </span>
-                    
-                    <div className="flex-1 flex gap-1 items-center">
-                      {field.isCustom ? (
-                        <input 
-                          type="text" 
-                          required
-                          value={field.value}
-                          onChange={(e) => handleUpdateModuleReparto(field.id, { value: e.target.value })}
-                          placeholder="Reparto..."
-                          className="flex-1 border border-blue-200 bg-white rounded px-2 py-1 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
-                        />
-                      ) : (
-                        <select
-                          value={field.value}
-                          onChange={(e) => handleUpdateModuleReparto(field.id, { value: e.target.value })}
-                          className="flex-1 border border-slate-200 bg-white rounded px-2 py-1 text-xs font-semibold focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
-                        >
-                          {REPARTI_PREDEFINITI.map((dept) => (
-                            <option key={dept} value={dept}>{dept}</option>
-                          ))}
-                        </select>
-                      )}
-
+                  <div key={field.id} className="flex flex-col gap-2 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div className="flex items-center justify-between border-b border-slate-150 pb-1">
+                      <span className="text-[10px] font-bold text-slate-400 font-sans">
+                        {idx + 1}° Reparto
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleUpdateModuleReparto(field.id, { isCustom: !field.isCustom, value: field.isCustom ? REPARTI_PREDEFINITI[0] : "" })}
-                        className="text-[9px] text-blue-600 font-bold hover:underline px-0.5 cursor-pointer"
+                        className="text-[9px] text-blue-600 font-bold hover:underline cursor-pointer"
                       >
-                        {field.isCustom ? "Std" : "Manuale"}
+                        {field.isCustom ? "Usa predefinito" : "Scrivi a mano"}
                       </button>
                     </div>
 
-                    {modalReparti.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveModuleReparto(field.id)}
-                        className="p-1 hover:bg-rose-100 hover:text-rose-600 text-slate-400 rounded transition-colors"
-                        title="Rimuovi reparto"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {/* Nome */}
+                      <div>
+                        {field.isCustom ? (
+                          <input 
+                            type="text" 
+                            required
+                            value={field.value}
+                            onChange={(e) => handleUpdateModuleReparto(field.id, { value: e.target.value })}
+                            placeholder="Reparto..."
+                            className="w-full border border-blue-200 bg-white rounded px-2 py-1 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
+                          />
+                        ) : (
+                          <select
+                            value={field.value}
+                            onChange={(e) => handleUpdateModuleReparto(field.id, { value: e.target.value })}
+                            className="w-full border border-slate-200 bg-white rounded px-2 py-1 text-xs font-semibold focus:ring-1 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
+                          >
+                            {REPARTI_PREDEFINITI.map((dept) => (
+                              <option key={dept} value={dept}>{dept}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+
+                      {/* Costo specifico */}
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative flex-1">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 font-mono">€</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            required
+                            value={field.costo !== undefined ? field.costo : 0}
+                            onChange={(e) => handleUpdateModuleReparto(field.id, { costo: Number(e.target.value) || 0 })}
+                            placeholder="Costo..."
+                            className="w-full border border-slate-200 bg-white rounded pl-5 pr-1 py-1 text-xs font-semibold font-mono focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
+                          />
+                        </div>
+
+                        {modalReparti.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveModuleReparto(field.id)}
+                            className="p-1 hover:bg-rose-100 hover:text-rose-600 text-slate-400 rounded transition-colors cursor-pointer"
+                            title="Rimuovi reparto"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -2864,17 +2828,18 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
             {/* Costo */}
             <div>
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Costo (€) *
+                Costo Complessivo (€) *
               </label>
               <input 
                 type="number"
-                required
-                min="0"
-                step="0.01"
-                value={costo}
-                onChange={e => setCosto(Number(e.target.value))}
-                className="w-full border border-slate-200 bg-slate-50/50 rounded px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden font-mono"
+                readOnly
+                disabled
+                value={calculatedTotalModalCosto.toFixed(2)}
+                className="w-full border border-slate-200 bg-slate-100 rounded px-3 py-2 text-xs font-bold font-mono text-slate-500 focus:outline-hidden select-none cursor-not-allowed"
               />
+              <p className="text-[9px] text-slate-400 mt-0.5 italic">
+                Somma automatica dei costi dei reparti sopra specificati
+              </p>
             </div>
 
             {/* Operatore (Persona) */}
