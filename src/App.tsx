@@ -169,14 +169,19 @@ export default function App() {
     return () => clearInterval(interval);
   }, [aiReportLoading]);
 
-  // Lista di tutti gli anni unici presenti per il filtro
+  // Lista di tutti gli anni unici presenti per il filtro (almeno dal 2026 al 2046)
   const availableYears = useMemo(() => {
     const years = ncs.map(nc => nc.data_apertura.substring(0, 4));
     const uniqueYears = Array.from(new Set(years)).filter(y => y.length === 4);
-    if (!uniqueYears.includes("2026")) {
-      uniqueYears.push("2026");
+    
+    // Garantisce che ci siano tutti gli anni dal 2026 al 2046
+    for (let y = 2026; y <= 2046; y++) {
+      const yStr = y.toString();
+      if (!uniqueYears.includes(yStr)) {
+        uniqueYears.push(yStr);
+      }
     }
-    return uniqueYears.sort((a, b) => b.localeCompare(a));
+    return uniqueYears.sort((a, b) => a.localeCompare(b));
   }, [ncs]);
 
   // Helper per scompattare molteplici reparti da un record di non conformità
