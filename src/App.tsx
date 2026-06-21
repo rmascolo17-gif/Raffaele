@@ -113,11 +113,51 @@ export default function App() {
     return formReparti.reduce((sum, item) => sum + (Number(item.costo) || 0), 0);
   }, [formReparti]);
 
-  const [formCausa, setFormCausa] = useState(CAUSE_PREDEFINITE[0]);
-  const [formCausaCustomOpen, setFormCausaCustomOpen] = useState(false);
-  const [formCausaCustomValue, setFormCausaCustomValue] = useState("");
+  // Stato per gestione di molteplici cause per la medesima NC
+  const [formCause, setFormCause] = useState<{ id: string; value: string; isCustom: boolean }[]>([
+    { id: "cause-init", value: CAUSE_PREDEFINITE[0], isCustom: false }
+  ]);
+
+  const handleAddCausaField = () => {
+    setFormCause(prev => [
+      ...prev,
+      { id: "cause-" + Date.now() + "-" + Math.random(), value: CAUSE_PREDEFINITE[0], isCustom: false }
+    ]);
+  };
+
+  const handleRemoveCausaField = (id: string) => {
+    if (formCause.length > 1) {
+      setFormCause(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const handleUpdateCausaField = (id: string, updates: Partial<{ value: string; isCustom: boolean }>) => {
+    setFormCause(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+  };
+
+  // Stato per gestione di molteplici persone/operatori per la medesima NC
+  const [formPersone, setFormPersone] = useState<{ id: string; value: string }[]>([
+    { id: "p-init", value: "" }
+  ]);
+
+  const handleAddPersonaField = () => {
+    setFormPersone(prev => [
+      ...prev,
+      { id: "p-" + Date.now() + "-" + Math.random(), value: "" }
+    ]);
+  };
+
+  const handleRemovePersonaField = (id: string) => {
+    if (formPersone.length > 1) {
+      setFormPersone(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const handleUpdatePersonaField = (id: string, value: string) => {
+    setFormPersone(prev => prev.map(item => item.id === id ? { ...item, value } : item));
+  };
+
   const [formCosto, setFormCosto] = useState<number>(0);
-  const [formPersona, setFormPersona] = useState("");
   const [formResponsabile, setFormResponsabile] = useState("");
   const [formNote, setFormNote] = useState("");
 
@@ -202,6 +242,36 @@ export default function App() {
         return Number(nc.costo) || 0;
       }
       return Number((Number(nc.costo) || 0) / reps.length);
+    }
+    return 0;
+  };
+
+  // Helper per scompattare molteplici cause da un record di non conformità
+  const getCause = (nc: NonConformita): string[] => {
+    if (!nc.causa) return ["Altro"];
+    return nc.causa.split(",").map(c => c.trim()).filter(Boolean);
+  };
+
+  // Helper per scompattare molteplici persone/operatori da un record di non conformità
+  const getPersone = (nc: NonConformita): string[] => {
+    if (!nc.persona) return ["N/D"];
+    return nc.persona.split(",").map(p => p.trim()).filter(Boolean);
+  };
+
+  // Helper per ottenere l'incidenza costo di una causa in una NC
+  const getCausaCosto = (nc: NonConformita, causa: string): number => {
+    const causes = getCause(nc);
+    if (causes.includes(causa)) {
+      return Number(nc.costo || 0) / causes.length;
+    }
+    return 0;
+  };
+
+  // Helper per ottenere l'incidenza costo di un operatore in una NC
+  const getPersonaCosto = (nc: NonConformita, persona: string): number => {
+    const persone = getPersone(nc);
+    if (persone.includes(persona)) {
+      return Number(nc.costo || 0) / persone.length;
     }
     return 0;
   };
@@ -388,17 +458,19 @@ export default function App() {
   const annualErrorAnalysis = useMemo(() => {
     const counts: Record<string, { causa: string; count: number; totalCost: number; months: Set<string> }> = {};
     yearNCs.forEach(nc => {
-      const uCausa = nc.causa?.trim() || "Altro";
+      const causes = getCause(nc);
       const monthStr = nc.data_apertura.substring(5, 7);
       const mItem = MESI_LIST.find(m => m.id === monthStr);
       const monthName = mItem ? mItem.nome : monthStr;
       
-      if (!counts[uCausa]) {
-        counts[uCausa] = { causa: uCausa, count: 0, totalCost: 0, months: new Set() };
-      }
-      counts[uCausa].count += 1;
-      counts[uCausa].totalCost += (Number(nc.costo) || 0);
-      counts[uCausa].months.add(monthName);
+      causes.forEach(uCausa => {
+        if (!counts[uCausa]) {
+          counts[uCausa] = { causa: uCausa, count: 0, totalCost: 0, months: new Set() };
+        }
+        counts[uCausa].count += 1;
+        counts[uCausa].totalCost += getCausaCosto(nc, uCausa);
+        counts[uCausa].months.add(monthName);
+      });
     });
 
     return Object.values(counts)
@@ -413,15 +485,20 @@ export default function App() {
   const annualPersonnelAnalysis = useMemo(() => {
     const counts: Record<string, { persona: string; count: number; totalCost: number; causes: Record<string, number> }> = {};
     yearNCs.forEach(nc => {
-      const uPersona = nc.persona?.trim() || "N/D";
-      const uCausa = nc.causa?.trim() || "Altro";
+      const persone = getPersone(nc);
+      const causes = getCause(nc);
       
-      if (!counts[uPersona]) {
-        counts[uPersona] = { persona: uPersona, count: 0, totalCost: 0, causes: {} };
-      }
-      counts[uPersona].count += 1;
-      counts[uPersona].totalCost += (Number(nc.costo) || 0);
-      counts[uPersona].causes[uCausa] = (counts[uPersona].causes[uCausa] || 0) + 1;
+      persone.forEach(uPersona => {
+        if (!counts[uPersona]) {
+          counts[uPersona] = { persona: uPersona, count: 0, totalCost: 0, causes: {} };
+        }
+        counts[uPersona].count += 1;
+        counts[uPersona].totalCost += getPersonaCosto(nc, uPersona);
+        
+        causes.forEach(uCausa => {
+          counts[uPersona].causes[uCausa] = (counts[uPersona].causes[uCausa] || 0) + 1;
+        });
+      });
     });
 
     return Object.values(counts)
@@ -452,12 +529,14 @@ export default function App() {
   const monthlyErrorAnalysis = useMemo(() => {
     const counts: Record<string, { causa: string; count: number; totalCost: number }> = {};
     monthNCs.forEach(nc => {
-      const uCausa = nc.causa?.trim() || "Altro";
-      if (!counts[uCausa]) {
-        counts[uCausa] = { causa: uCausa, count: 0, totalCost: 0 };
-      }
-      counts[uCausa].count += 1;
-      counts[uCausa].totalCost += (Number(nc.costo) || 0);
+      const causes = getCause(nc);
+      causes.forEach(uCausa => {
+        if (!counts[uCausa]) {
+          counts[uCausa] = { causa: uCausa, count: 0, totalCost: 0 };
+        }
+        counts[uCausa].count += 1;
+        counts[uCausa].totalCost += getCausaCosto(nc, uCausa);
+      });
     });
 
     return Object.values(counts)
@@ -472,15 +551,20 @@ export default function App() {
   const monthlyPersonnelAnalysis = useMemo(() => {
     const counts: Record<string, { persona: string; count: number; totalCost: number; causes: Record<string, number> }> = {};
     monthNCs.forEach(nc => {
-      const uPersona = nc.persona?.trim() || "N/D";
-      const uCausa = nc.causa?.trim() || "Altro";
+      const persone = getPersone(nc);
+      const causes = getCause(nc);
       
-      if (!counts[uPersona]) {
-        counts[uPersona] = { persona: uPersona, count: 0, totalCost: 0, causes: {} };
-      }
-      counts[uPersona].count += 1;
-      counts[uPersona].totalCost += (Number(nc.costo) || 0);
-      counts[uPersona].causes[uCausa] = (counts[uPersona].causes[uCausa] || 0) + 1;
+      persone.forEach(uPersona => {
+        if (!counts[uPersona]) {
+          counts[uPersona] = { persona: uPersona, count: 0, totalCost: 0, causes: {} };
+        }
+        counts[uPersona].count += 1;
+        counts[uPersona].totalCost += getPersonaCosto(nc, uPersona);
+        
+        causes.forEach(uCausa => {
+          counts[uPersona].causes[uCausa] = (counts[uPersona].causes[uCausa] || 0) + 1;
+        });
+      });
     });
 
     return Object.values(counts)
@@ -594,7 +678,14 @@ export default function App() {
     const finalRepartiList = formReparti
       .map(item => item.value.trim())
       .filter(val => val !== "");
-    const finalCausa = formCausaCustomOpen ? formCausaCustomValue.trim() : formCausa;
+
+    const finalCausaList = formCause
+      .map(item => item.value.trim())
+      .filter(val => val !== "");
+
+    const finalPersonaList = formPersone
+      .map(item => item.value.trim())
+      .filter(val => val !== "");
 
     // Validazioni del Modello NC richiesto
     if (!formCommessa.trim()) {
@@ -613,8 +704,8 @@ export default function App() {
       setFormMessage({ status: "error", text: "Devi specificare almeno un reparto." });
       return;
     }
-    if (!finalCausa) {
-      setFormMessage({ status: "error", text: "Devi specificare la causa di non conformità." });
+    if (finalCausaList.length === 0) {
+      setFormMessage({ status: "error", text: "Devi specificare almeno una causa di non conformità." });
       return;
     }
 
@@ -635,9 +726,9 @@ export default function App() {
       data_apertura: formDataApertura,
       data_chiusura: formDataChiusura || "",
       reparto: finalRepartiList.join(", "),
-      causa: finalCausa,
+      causa: finalCausaList.join(", "),
       costo: calculatedTotalFormCosto,
-      persona: formPersona.trim() || "N/D",
+      persona: finalPersonaList.length > 0 ? finalPersonaList.join(", ") : "N/D",
       responsabile: formResponsabile.trim() || "N/D",
       reparti_costi: repartiCostiMap,
       note: formNote.trim()
@@ -650,15 +741,18 @@ export default function App() {
     setFormCliente("");
     setFormCodiceDisegno("");
     setFormCosto(0);
-    setFormPersona("");
     setFormResponsabile("");
     setFormNote("");
     setFormDataChiusura("");
     setFormReparti([
       { id: "dept-reset-" + Date.now(), value: REPARTI_PREDEFINITI[0], isCustom: false, costo: 0 }
     ]);
-    setFormCausaCustomOpen(false);
-    setFormCausaCustomValue("");
+    setFormCause([
+      { id: "cause-reset-" + Date.now(), value: CAUSE_PREDEFINITE[0], isCustom: false }
+    ]);
+    setFormPersone([
+      { id: "p-reset-" + Date.now(), value: "" }
+    ]);
     
     setFormMessage({ status: "success", text: "Non Conformità inserita con successo nel database!" });
     
@@ -1302,43 +1396,73 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Causa (Scelta Pred o Libera) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        Causa anomalia *
+                  {/* Cause Anomalie (Multiscelte / Inserimento multiplo) */}
+                  <div className="space-y-2 bg-violet-50/15 p-3 border border-violet-100 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Cause anomalie * <span className="text-[10px] text-slate-400 font-normal italic">(Almeno una)</span>
                       </label>
                       <button
                         type="button"
-                        onClick={() => {
-                          setFormCausaCustomOpen(!formCausaCustomOpen);
-                          setFormCausaCustomValue("");
-                        }}
-                        className="text-[10px] text-blue-600 font-medium hover:underline"
+                        onClick={handleAddCausaField}
+                        className="text-xs px-2.5 py-1 bg-gradient-to-r from-violet-50 to-indigo-50 hover:from-violet-100 hover:to-indigo-100 border border-violet-150 text-violet-700 font-bold rounded-lg flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                       >
-                        {formCausaCustomOpen ? "Seleziona standard" : "Inserisci a mano"}
+                        <Plus className="w-3.5 h-3.5" /> Aggiungi Causa
                       </button>
                     </div>
-                    {formCausaCustomOpen ? (
-                      <input 
-                        type="text" 
-                        required
-                        value={formCausaCustomValue}
-                        onChange={(e) => setFormCausaCustomValue(e.target.value)}
-                        placeholder="Inserisci causa personalizzata..."
-                        className="w-full border border-slate-200 border-blue-400 bg-blue-50/20 rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                      />
-                    ) : (
-                      <select
-                        value={formCausa}
-                        onChange={(e) => setFormCausa(e.target.value)}
-                        className="w-full border border-slate-200 rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-medium"
-                      >
-                        {CAUSE_PREDEFINITE.map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                    )}
+
+                    <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                      {formCause.map((field, idx) => (
+                        <div key={field.id} className="flex flex-col gap-2 p-2.5 bg-white border border-slate-250 rounded-lg shadow-3xs">
+                          <div className="flex items-center justify-between border-b border-slate-100 pb-1 pb-1">
+                            <span className="text-[10px] font-bold text-slate-400">
+                              {idx + 1}° Causa
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateCausaField(field.id, { isCustom: !field.isCustom, value: field.isCustom ? CAUSE_PREDEFINITE[0] : "" })}
+                              className="text-[10px] text-blue-600 font-bold hover:underline cursor-pointer"
+                            >
+                              {field.isCustom ? "Scegli predefinita" : "Scrivi a mano"}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {field.isCustom ? (
+                              <input 
+                                type="text" 
+                                required
+                                value={field.value}
+                                onChange={(e) => handleUpdateCausaField(field.id, { value: e.target.value })}
+                                placeholder="Scrivi causa personalizzata..."
+                                className="flex-1 border border-blue-200 bg-white rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-medium text-slate-800"
+                              />
+                            ) : (
+                              <select
+                                value={field.value}
+                                onChange={(e) => handleUpdateCausaField(field.id, { value: e.target.value })}
+                                className="flex-1 border border-slate-200 bg-white rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-semibold text-slate-800 cursor-pointer"
+                              >
+                                {CAUSE_PREDEFINITE.map((c) => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+                            )}
+
+                            {formCause.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCausaField(field.id)}
+                                className="p-1.5 hover:bg-rose-100 hover:text-rose-600 text-slate-400 rounded-md transition-colors cursor-pointer"
+                                title="Rimuovi questa causa"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Note / Spiegazione dell'accaduto */}
@@ -1373,25 +1497,59 @@ export default function App() {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Operatore / Persona
-                      </label>
-                      <input 
-                        type="text" 
-                        value={formPersona}
-                        onChange={(e) => setFormPersona(e.target.value)}
-                        placeholder="Nome operatore"
-                        className="w-full border border-slate-200 rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                      />
+                  {/* Input Operatori (Persona) e Responsabile */}
+                  <div className="space-y-3">
+                    {/* Operatori Coinvolti (Inserimento multiplo) */}
+                    <div className="space-y-2 bg-emerald-50/15 p-3 border border-emerald-100 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Operatori coinvolti / Personale <span className="text-[10px] text-slate-400 font-normal italic">(Es. "Mario Rossi")</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleAddPersonaField}
+                          className="text-xs px-2.5 py-1 bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 border border-emerald-150 text-emerald-700 font-bold rounded-lg flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Aggiungi Operatore
+                        </button>
+                      </div>
+
+                      <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                        {formPersone.map((pField, idx) => (
+                          <div key={pField.id} className="flex items-center gap-1.5 p-2 bg-white border border-slate-250 rounded-lg shadow-3xs">
+                            <span className="text-[10px] font-bold text-slate-400 min-w-[20px] text-center">
+                              {idx + 1}°
+                            </span>
+                            <input 
+                              type="text" 
+                              required
+                              value={pField.value}
+                              onChange={(e) => handleUpdatePersonaField(pField.id, e.target.value)}
+                              placeholder="Nome operatore (es. Mario Rossi)"
+                              className="flex-1 border border-slate-200 bg-white rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-medium text-slate-800"
+                            />
+                            {formPersone.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePersonaField(pField.id)}
+                                className="p-1.5 hover:bg-rose-100 hover:text-rose-600 text-slate-400 rounded-md transition-colors cursor-pointer"
+                                title="Rimuovi questo operatore"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
                         Responsabile *
                       </label>
                       <input 
                         type="text" 
+                        required
                         value={formResponsabile}
                         onChange={(e) => setFormResponsabile(e.target.value)}
                         placeholder="Nome responsabile"
@@ -2570,9 +2728,63 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
     return modalReparti.reduce((sum, item) => sum + (Number(item.costo) || 0), 0);
   }, [modalReparti]);
 
-  const [causa, setCausa] = useState(nc.causa);
-  const [costo, setCosto] = useState(nc.costo);
-  const [persona, setPersona] = useState(nc.persona);
+  const [modalCause, setModalCause] = useState<{ id: string; value: string; isCustom: boolean }[]>(() => {
+    const list = nc.causa ? nc.causa.split(",").map(c => c.trim()).filter(Boolean) : [];
+    if (list.length === 0) {
+      return [{ id: "m-cause-0", value: CAUSE_PREDEFINITE[0], isCustom: false }];
+    }
+    return list.map((val, idx) => ({
+      id: `m-cause-${idx}`,
+      value: val,
+      isCustom: !CAUSE_PREDEFINITE.includes(val)
+    }));
+  });
+
+  const handleAddModalCausa = () => {
+    setModalCause(prev => [
+      ...prev,
+      { id: `m-cause-${Date.now()}-${Math.random()}`, value: CAUSE_PREDEFINITE[0], isCustom: false }
+    ]);
+  };
+
+  const handleRemoveModalCausa = (id: string) => {
+    if (modalCause.length > 1) {
+      setModalCause(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const handleUpdateModalCausa = (id: string, updates: Partial<{ value: string; isCustom: boolean }>) => {
+    setModalCause(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+  };
+
+  const [modalPersone, setModalPersone] = useState<{ id: string; value: string }[]>(() => {
+    const list = nc.persona ? nc.persona.split(",").map(p => p.trim()).filter(Boolean) : [];
+    if (list.length === 0) {
+      return [{ id: "m-pers-0", value: "" }];
+    }
+    return list.map((val, idx) => ({
+      id: `m-pers-${idx}`,
+      value: val
+    }));
+  });
+
+  const handleAddModalPersona = () => {
+    setModalPersone(prev => [
+      ...prev,
+      { id: `m-pers-${Date.now()}-${Math.random()}`, value: "" }
+    ]);
+  };
+
+  const handleRemoveModalPersona = (id: string) => {
+    if (modalPersone.length > 1) {
+      setModalPersone(prev => prev.filter(item => item.id !== id));
+    }
+  };
+
+  const handleUpdateModalPersona = (id: string, value: string) => {
+    setModalPersone(prev => prev.map(item => item.id === id ? { ...item, value } : item));
+  };
+
   const [responsabile, setResponsabile] = useState(nc.responsabile);
   const [note, setNote] = useState(nc.note || "");
 
@@ -2585,6 +2797,18 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
       alert("Devi specificare almeno un reparto.");
       return;
     }
+
+    const finalCausaList = modalCause
+      .map(item => item.value.trim())
+      .filter(val => val !== "");
+    if (finalCausaList.length === 0) {
+      alert("Devi specificare almeno una causa di non conformità.");
+      return;
+    }
+
+    const finalPersonaList = modalPersone
+      .map(item => item.value.trim())
+      .filter(val => val !== "");
 
     const repartiCostiMap: Record<string, number> = {};
     modalReparti.forEach(item => {
@@ -2604,9 +2828,9 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
       data_chiusura: dataChiusura,
       reparto: finalRepartiList.join(", "),
       reparti_costi: repartiCostiMap,
-      causa: causa.trim(),
+      causa: finalCausaList.join(", "),
       costo: calculatedTotalModalCosto,
-      persona: persona.trim() || "N/D",
+      persona: finalPersonaList.length > 0 ? finalPersonaList.join(", ") : "N/D",
       responsabile: responsabile.trim() || "N/D",
       note: note.trim()
     });
@@ -2814,24 +3038,77 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
               </div>
             </div>
 
-            {/* Causa */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Causa / Anomalia *
-              </label>
-              <select
-                value={causa}
-                onChange={e => setCausa(e.target.value)}
-                className="w-full border border-slate-200 bg-slate-50/50 rounded px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
-              >
-                {cause.map(c => (
-                  <option key={c} value={c}>{c}</option>
+            {/* Cause Anomalie (Multiscelte / Inserimento multiplo) */}
+            <div className="md:col-span-2 space-y-2 bg-violet-50/10 p-3 border border-violet-100/50 rounded-lg">
+              <div className="flex items-center justify-between pb-1 border-b border-violet-50">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Cause Anomalie * <span className="text-[10px] text-slate-400 font-normal italic">(Almeno una)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAddModalCausa}
+                  className="text-[11px] px-2.5 py-1 bg-gradient-to-r from-violet-50 to-indigo-50 hover:from-violet-100 hover:to-indigo-100 border border-violet-100 text-violet-700 font-bold rounded flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Aggiungi Causa
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                {modalCause.map((field, idx) => (
+                  <div key={field.id} className="flex flex-col gap-2 p-2 bg-white border border-slate-200 rounded-md">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-1">
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {idx + 1}° Causa
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleUpdateModalCausa(field.id, { isCustom: !field.isCustom, value: field.isCustom ? CAUSE_PREDEFINITE[0] : "" })}
+                        className="text-[10px] text-blue-600 font-bold hover:underline cursor-pointer"
+                      >
+                        {field.isCustom ? "Scelta predefinita" : "Scrivi a mano"}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {field.isCustom ? (
+                        <input 
+                          type="text" 
+                          required
+                          value={field.value}
+                          onChange={(e) => handleUpdateModalCausa(field.id, { value: e.target.value })}
+                          placeholder="Scrivi causa personalizzata..."
+                          className="flex-1 border border-blue-200 bg-white rounded px-2.5 py-1 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
+                        />
+                      ) : (
+                        <select
+                          value={field.value}
+                          onChange={(e) => handleUpdateModalCausa(field.id, { value: e.target.value })}
+                          className="flex-1 border border-slate-200 bg-white rounded px-2.5 py-1 text-xs font-semibold focus:ring-1 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
+                        >
+                          {CAUSE_PREDEFINITE.map((c) => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {modalCause.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveModalCausa(field.id)}
+                          className="p-1 hover:bg-rose-100 hover:text-rose-600 text-slate-400 rounded transition-colors cursor-pointer"
+                          title="Rimuovi questa causa"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 ))}
-              </select>
+              </div>
             </div>
 
             {/* Costo */}
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                 Costo Complessivo (€) *
               </label>
@@ -2847,17 +3124,48 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
               </p>
             </div>
 
-            {/* Operatore (Persona) */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Operatore / Persona
-              </label>
-              <input 
-                type="text"
-                value={persona}
-                onChange={e => setPersona(e.target.value)}
-                className="w-full border border-slate-200 bg-slate-50/50 rounded px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
-              />
+            {/* Operatori Coinvolti (Multiscelte / Inserimento multiplo) */}
+            <div className="md:col-span-2 space-y-2 bg-emerald-50/10 p-3 border border-emerald-100/50 rounded-lg">
+              <div className="flex items-center justify-between pb-1 border-b border-emerald-50">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Operatori / Persona <span className="text-[10px] text-slate-400 font-normal italic">(Almeno uno)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAddModalPersona}
+                  className="text-[11px] px-2.5 py-1 bg-gradient-to-r from-emerald-50 to-teal-50 hover:from-emerald-100 hover:to-teal-100 border border-emerald-100 text-emerald-700 font-bold rounded flex items-center gap-1 shadow-xs transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Aggiungi Operatore
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                {modalPersone.map((pField, idx) => (
+                  <div key={pField.id} className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-md">
+                    <span className="text-[10px] font-bold text-slate-400 min-w-[20px] text-center">
+                      {idx + 1}°
+                    </span>
+                    <input 
+                      type="text" 
+                      required
+                      value={pField.value}
+                      onChange={(e) => handleUpdateModalPersona(pField.id, e.target.value)}
+                      placeholder="Nome operatore (es. Mario Rossi)"
+                      className="flex-1 border border-slate-200 bg-white rounded px-2.5 py-1 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    {modalPersone.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveModalPersona(pField.id)}
+                        className="p-1 hover:bg-rose-100 hover:text-rose-600 text-slate-400 rounded transition-colors cursor-pointer"
+                        title="Rimuovi questo operatore"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Note / Spiegazione */}
