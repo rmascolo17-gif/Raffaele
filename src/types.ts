@@ -17,6 +17,9 @@ export interface NonConformita {
   responsabile: string;
   reparti_costi?: Record<string, number>; // Associazione costi per ciascun reparto della NC
   note?: string; // Spiegazione di cosa è successo
+  correzione?: string; // Come è stato risolto il problema
+  azione_correttiva?: string; // Come prevenire che riaccada
+  verifica_efficacia?: string; // "SI" | "NO" | "" (vuoto/da verificare)
 }
 
 // Reparti predefiniti consigliati, l'utente può comunque aggiungerne o scriverli a mano

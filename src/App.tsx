@@ -24,6 +24,7 @@ import {
   FileCheck,
   CheckCircle2,
   AlertCircle,
+  ChevronDown,
   Edit2,
   Users,
   AlertTriangle
@@ -160,11 +161,15 @@ export default function App() {
   const [formCosto, setFormCosto] = useState<number>(0);
   const [formResponsabile, setFormResponsabile] = useState("");
   const [formNote, setFormNote] = useState("");
+  const [formCorrezione, setFormCorrezione] = useState("");
+  const [formAzioneCorrettiva, setFormAzioneCorrettiva] = useState("");
+  const [formVerificaEfficacia, setFormVerificaEfficacia] = useState("");
 
   const [formMessage, setFormMessage] = useState<{ status: "success" | "error"; text: string } | null>(null);
 
   // Ricerca nel registro
   const [searchTerm, setSearchTerm] = useState("");
+  const [expandedNcId, setExpandedNcId] = useState<string | null>(null);
 
   // Stato Modifica Non Conformità
   const [editingNc, setEditingNc] = useState<NonConformita | null>(null);
@@ -731,7 +736,10 @@ export default function App() {
       persona: finalPersonaList.length > 0 ? finalPersonaList.join(", ") : "N/D",
       responsabile: formResponsabile.trim() || "N/D",
       reparti_costi: repartiCostiMap,
-      note: formNote.trim()
+      note: formNote.trim(),
+      correzione: formCorrezione.trim(),
+      azione_correttiva: formAzioneCorrettiva.trim(),
+      verifica_efficacia: formVerificaEfficacia
     };
 
     setNcs([newNC, ...ncs]);
@@ -743,6 +751,9 @@ export default function App() {
     setFormCosto(0);
     setFormResponsabile("");
     setFormNote("");
+    setFormCorrezione("");
+    setFormAzioneCorrettiva("");
+    setFormVerificaEfficacia("");
     setFormDataChiusura("");
     setFormReparti([
       { id: "dept-reset-" + Date.now(), value: REPARTI_PREDEFINITI[0], isCustom: false, costo: 0 }
@@ -1479,6 +1490,76 @@ export default function App() {
                     />
                   </div>
 
+                  {/* Correzione */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Correzione (Come è stato risolto il problema nell'immediato)
+                    </label>
+                    <textarea 
+                      value={formCorrezione}
+                      onChange={(e) => setFormCorrezione(e.target.value)}
+                      placeholder="Descrivi la soluzione ad-hoc o la riparazione effettuata sul pezzo (es. rilavorazione, scarto)..."
+                      rows={2}
+                      className="w-full border border-slate-200 rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden resize-none font-medium text-slate-800"
+                    />
+                  </div>
+
+                  {/* Azione Correttiva */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Azione Correttiva (Come evitare che accada di nuovo il problema)
+                    </label>
+                    <textarea 
+                      value={formAzioneCorrettiva}
+                      onChange={(e) => setFormAzioneCorrettiva(e.target.value)}
+                      placeholder="Descrivi le azioni preventive a lungo termine (es. aggiornamento procedura, formazione)..."
+                      rows={2}
+                      className="w-full border border-slate-200 rounded-lg text-xs px-2.5 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-hidden resize-none font-medium text-slate-800"
+                    />
+                  </div>
+
+                  {/* Verifica Efficacia */}
+                  <div className="p-3 bg-blue-50/15 border border-blue-100 rounded-lg space-y-2">
+                    <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
+                      Verifica Efficacia: Il problema si è riverificato?
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormVerificaEfficacia("")}
+                        className={`flex-1 py-1.5 px-3 text-center border rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          formVerificaEfficacia === "" 
+                            ? "bg-slate-200 border-slate-400 text-slate-900 shadow-3xs" 
+                            : "bg-white border-slate-200 text-slate-500 hover:text-slate-700"
+                        }`}
+                      >
+                        ⬜ Vuoto / Da verificare
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormVerificaEfficacia("SI")}
+                        className={`flex-1 py-1.5 px-3 text-center border rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          formVerificaEfficacia === "SI" 
+                            ? "bg-rose-100 border-rose-355 text-rose-700 shadow-3xs" 
+                            : "bg-white border-slate-200 text-slate-500 hover:text-rose-600"
+                        }`}
+                      >
+                        ⚠️ Sì (Riverificato)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormVerificaEfficacia("NO")}
+                        className={`flex-1 py-1.5 px-3 text-center border rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          formVerificaEfficacia === "NO" 
+                            ? "bg-emerald-100 border-emerald-355 text-emerald-700 shadow-3xs" 
+                            : "bg-white border-slate-200 text-slate-500 hover:text-emerald-600"
+                        }`}
+                      >
+                        ✅ No (Efficace)
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Costo, Persona & Responsabile */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1820,6 +1901,7 @@ export default function App() {
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wide text-[10px]">
+                          <th className="p-3 w-8"></th>
                           <th className="p-3">DATA</th>
                           <th className="p-3">TIPO</th>
                           <th className="p-3">COMMESSA</th>
@@ -1834,97 +1916,188 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-150">
-                        {searchedNCs.map(nc => (
-                          <tr key={nc.id} className="hover:bg-slate-50 transition-colors font-medium text-slate-700">
-                            
-                            {/* Data */}
-                            <td className="p-3 whitespace-nowrap">
-                              <div className="font-semibold text-slate-900">{nc.data_apertura}</div>
-                              {nc.data_chiusura ? (
-                                <div className="text-[10px] text-emerald-600">Chiusura: {nc.data_chiusura}</div>
-                              ) : (
-                                <div className="text-[10px] text-amber-500 font-bold">APERTA</div>
+                        {searchedNCs.map(nc => {
+                          const isExpanded = expandedNcId === nc.id;
+                          return (
+                            <React.Fragment key={nc.id}>
+                              <tr 
+                                onClick={() => setExpandedNcId(isExpanded ? null : nc.id)}
+                                className={`hover:bg-slate-50 transition-colors font-medium text-slate-700 cursor-pointer select-none ${isExpanded ? 'bg-blue-50/15 font-semibold' : ''}`}
+                              >
+                                {/* Chevron cell */}
+                                <td className="p-3 text-center">
+                                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 mx-auto transition-transform ${isExpanded ? 'rotate-180 text-blue-600' : ''}`} />
+                                </td>
+
+                                {/* Data */}
+                                <td className="p-3 whitespace-nowrap">
+                                  <div className="font-semibold text-slate-900">{nc.data_apertura}</div>
+                                  {nc.data_chiusura ? (
+                                    <div className="text-[10px] text-emerald-600 font-bold">Chiusura: {nc.data_chiusura}</div>
+                                  ) : (
+                                    <div className="text-[10px] text-amber-500 font-bold">APERTA</div>
+                                  )}
+                                </td>
+
+                                {/* Tipo NC */}
+                                <td className="p-3">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    nc.tipo_nc === "Interna"
+                                      ? "bg-blue-50 text-blue-700 border border-blue-100"
+                                      : nc.tipo_nc === "Cliente"
+                                      ? "bg-amber-50 text-amber-700 border border-amber-100"
+                                      : "bg-purple-50 text-purple-700 border border-purple-100"
+                                  }`}>
+                                    {nc.tipo_nc}
+                                  </span>
+                                </td>
+
+                                {/* Commessa */}
+                                <td className="p-3 font-bold text-slate-900 font-mono">
+                                  {nc.commessa}
+                                </td>
+
+                                {/* Cliente */}
+                                <td className="p-3 text-slate-900">
+                                  {nc.cliente}
+                                </td>
+
+                                {/* Disegno */}
+                                <td className="p-3 font-mono text-slate-500 text-[11px]">
+                                  {nc.codice_disegno}
+                                </td>
+
+                                {/* Reparto */}
+                                <td className="p-3">
+                                  <span className="font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded">
+                                    {nc.reparto}
+                                  </span>
+                                </td>
+
+                                {/* Causa */}
+                                <td className="p-3 max-w-[150px] truncate text-slate-600 text-xs" title={nc.causa}>
+                                  {nc.causa}
+                                </td>
+
+                                {/* Note */}
+                                <td className="p-3 max-w-[150px] truncate text-slate-500 text-xs italic" title={nc.note || "Nessuna nota"}>
+                                  {nc.note || <span className="text-slate-300">Nessuna spiegazione</span>}
+                                </td>
+
+                                {/* Costo */}
+                                <td className="p-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                                  &euro;{nc.costo.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </td>
+
+                                {/* Responsabile */}
+                                <td className="p-3 text-slate-500 whitespace-nowrap">
+                                  <div className="font-semibold text-slate-700">{nc.responsabile}</div>
+                                  <div className="text-[10px] text-slate-400">Op: {nc.persona}</div>
+                                </td>
+
+                                {/* Azioni */}
+                                <td className="p-3 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingNc(nc);
+                                      }}
+                                      title="Modifica Non Conformità"
+                                      className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded transition-all cursor-pointer"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5 text-blue-600" />
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteNC(nc.id);
+                                      }}
+                                      title="Elimina Non Conformità"
+                                      className="p-1.5 text-slate-400 hover:text-red-655 hover:bg-slate-150 rounded transition-colors cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {isExpanded && (
+                                <tr className="bg-slate-50/50">
+                                  <td colSpan={12} className="p-4 bg-slate-50/35 border-t border-b border-slate-150">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-medium">
+                                      
+                                      {/* Note spiegazione */}
+                                      <div className="bg-white p-3.5 rounded-lg border border-slate-200 shadow-3xs flex flex-col justify-between">
+                                        <div>
+                                          <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">NOTE / SPIEGAZIONE ACCADUTO</div>
+                                          <p className="text-slate-700 font-medium whitespace-pre-wrap leading-relaxed text-[11px]">
+                                            {nc.note || <span className="text-slate-400 italic">Nessuna spiegazione dettagliata registrata.</span>}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Correzione */}
+                                      <div className="bg-white p-3.5 rounded-lg border border-slate-205 shadow-3xs flex flex-col justify-between">
+                                        <div>
+                                          <div className="text-[9px] font-bold text-emerald-600 uppercase tracking-widest mb-1.5">CORREZIONE E SOLUZIONE IMMEDIATA</div>
+                                          <p className="text-slate-750 font-semibold whitespace-pre-wrap leading-relaxed text-[11px]">
+                                            {nc.correzione || <span className="text-slate-400 italic font-normal">Nessuna correzione documentata.</span>}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Azione Correttiva */}
+                                      <div className="bg-white p-3.5 rounded-lg border border-slate-205 shadow-3xs flex flex-col justify-between">
+                                        <div>
+                                          <div className="text-[9px] font-bold text-violet-600 uppercase tracking-widest mb-1.5">AZIONE CORRETTIVA DI PREVENZIONE</div>
+                                          <p className="text-slate-750 font-semibold whitespace-pre-wrap leading-relaxed text-[11px]">
+                                            {nc.azione_correttiva || <span className="text-slate-400 italic font-normal">Nessuna azione correttiva formulata.</span>}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      {/* Verifica Efficacia (Il quadratino sì/no/vuoto) */}
+                                      <div className="md:col-span-3 bg-white p-3 rounded-lg border border-slate-200 shadow-3xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-1">
+                                        <div className="flex items-center gap-2.5">
+                                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Verifica Efficacia (Il problema si è riverificato?):</span>
+                                          {nc.verifica_efficacia === "SI" ? (
+                                            <span className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 font-bold rounded flex items-center gap-1.5 text-[10px] shadow-3xs">
+                                              <span className="inline-block w-2.5 h-2.5 bg-rose-600 border border-rose-700 font-bold rounded-xs text-[9px] leading-3 text-center text-white flex items-center justify-center">X</span>
+                                              SÌ (L'anomalia si è ripetuta - Azione Inefficace ❌)
+                                            </span>
+                                          ) : nc.verifica_efficacia === "NO" ? (
+                                            <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold rounded flex items-center gap-1.5 text-[10px] shadow-3xs">
+                                              <span className="inline-block w-2.5 h-2.5 bg-emerald-600 border border-emerald-700 font-bold rounded-xs text-[9px] leading-3 text-center text-white flex items-center justify-center">✓</span>
+                                              NO (L'anomalia NON si è ripetuta - Azione Efficace ✅)
+                                            </span>
+                                          ) : (
+                                            <span className="px-2.5 py-1 bg-slate-100 border border-slate-250 text-slate-500 font-bold rounded flex items-center gap-1.5 text-[10px]">
+                                              <span className="inline-block w-2.5 h-2.5 bg-white border border-slate-400 rounded-xs"></span>
+                                              DA VERIFICARE (Nessuna ripetizione testata / Vuoto)
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        {nc.reparti_costi && Object.keys(nc.reparti_costi).length > 0 && (
+                                          <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                                            <span className="text-slate-400 font-bold uppercase tracking-wider">Quote Costi per Reparto:</span>
+                                            {Object.entries(nc.reparti_costi).map(([dept, costValue]) => (
+                                              <span key={dept} className="bg-slate-50 text-slate-700 font-bold px-2 py-0.5 rounded border border-slate-200">
+                                                {dept}: <span className="text-blue-650 font-mono">&euro;{costValue.toLocaleString("it-IT", { minimumFractionDigits: 1 })}</span>
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+
+                                    </div>
+                                  </td>
+                                </tr>
                               )}
-                            </td>
-
-                            {/* Tipo NC */}
-                            <td className="p-3">
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                nc.tipo_nc === "Interna"
-                                  ? "bg-blue-50 text-blue-700 border border-blue-100"
-                                  : nc.tipo_nc === "Cliente"
-                                  ? "bg-amber-50 text-amber-700 border border-amber-100"
-                                  : "bg-purple-50 text-purple-700 border border-purple-100"
-                              }`}>
-                                {nc.tipo_nc}
-                              </span>
-                            </td>
-
-                            {/* Commessa */}
-                            <td className="p-3 font-bold text-slate-900 font-mono">
-                              {nc.commessa}
-                            </td>
-
-                            {/* Cliente */}
-                            <td className="p-3 text-slate-900">
-                              {nc.cliente}
-                            </td>
-
-                            {/* Disegno */}
-                            <td className="p-3 font-mono text-slate-500 text-[11px]">
-                              {nc.codice_disegno}
-                            </td>
-
-                            {/* Reparto */}
-                            <td className="p-3">
-                              <span className="font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded">
-                                {nc.reparto}
-                              </span>
-                            </td>
-
-                            {/* Causa */}
-                            <td className="p-3 max-w-[180px] truncate text-slate-600 text-xs" title={nc.causa}>
-                              {nc.causa}
-                            </td>
-
-                            {/* Note */}
-                            <td className="p-3 max-w-[220px] truncate text-slate-500 text-xs italic" title={nc.note || "Nessuna nota"}>
-                              {nc.note || <span className="text-slate-300">Nessuna spiegazione</span>}
-                            </td>
-
-                            {/* Costo */}
-                            <td className="p-3 text-right font-mono font-bold text-slate-900">
-                              €{nc.costo.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-
-                            {/* Responsabile */}
-                            <td className="p-3 text-slate-500 whitespace-nowrap">
-                              <div className="font-semibold text-slate-700">{nc.responsabile}</div>
-                              <div className="text-[10px] text-slate-400">Op: {nc.persona}</div>
-                            </td>
-
-                            {/* Azioni */}
-                            <td className="p-3 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  onClick={() => setEditingNc(nc)}
-                                  title="Modifica Non Conformità"
-                                  className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-slate-100 rounded transition-all cursor-pointer"
-                                >
-                                  <Edit2 className="w-3.5 h-3.5 text-blue-600" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteNC(nc.id)}
-                                  title="Elimina Non Conformità"
-                                  className="p-1.5 text-slate-400 hover:text-red-655 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
-                                </button>
-                              </div>
-                            </td>
-
-                          </tr>
-                        ))}
+                            </React.Fragment>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -2787,6 +2960,9 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
 
   const [responsabile, setResponsabile] = useState(nc.responsabile);
   const [note, setNote] = useState(nc.note || "");
+  const [correzione, setCorrezione] = useState(nc.correzione || "");
+  const [azioneCorrettiva, setAzioneCorrettiva] = useState(nc.azione_correttiva || "");
+  const [verificaEfficacia, setVerificaEfficacia] = useState(nc.verifica_efficacia || "");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2832,7 +3008,10 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
       costo: calculatedTotalModalCosto,
       persona: finalPersonaList.length > 0 ? finalPersonaList.join(", ") : "N/D",
       responsabile: responsabile.trim() || "N/D",
-      note: note.trim()
+      note: note.trim(),
+      correzione: correzione.trim(),
+      azione_correttiva: azioneCorrettiva.trim(),
+      verifica_efficacia: verificaEfficacia
     });
   };
 
@@ -3180,6 +3359,76 @@ function EditNcModal({ nc, reparti, cause, onSave, onClose }: EditNcModalProps) 
                 rows={2}
                 className="w-full border border-slate-200 bg-slate-50/50 rounded px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden resize-none text-slate-800"
               />
+            </div>
+
+            {/* Correzione */}
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Correzione (Come è stato risolto il problema nell'immediato)
+              </label>
+              <textarea 
+                value={correzione}
+                onChange={e => setCorrezione(e.target.value)}
+                placeholder="Spiega come è stato risolto/riparato il problema..."
+                rows={2}
+                className="w-full border border-slate-200 bg-slate-50/50 rounded px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden resize-none text-slate-800"
+              />
+            </div>
+
+            {/* Azione Correttiva */}
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Azione Correttiva (Come evitare che si ripeta)
+              </label>
+              <textarea 
+                value={azioneCorrettiva}
+                onChange={e => setAzioneCorrettiva(e.target.value)}
+                placeholder="Modifiche a processi, macchinari o istruzioni per evitare ripetitività..."
+                rows={2}
+                className="w-full border border-slate-200 bg-slate-50/50 rounded px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-blue-500 focus:outline-hidden resize-none text-slate-800"
+              />
+            </div>
+
+            {/* Verifica Efficacia */}
+            <div className="md:col-span-2 p-3 bg-blue-50/10 border border-blue-100/55 rounded-lg space-y-2">
+              <label className="block text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                Verifica Efficacia: Il problema si è riverificato?
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVerificaEfficacia("")}
+                  className={`flex-1 py-1.5 px-3 text-center border rounded text-xs font-semibold transition-all cursor-pointer ${
+                    verificaEfficacia === "" 
+                      ? "bg-slate-200 border-slate-400 text-slate-900 shadow-3xs" 
+                      : "bg-white border-slate-200 text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  ⬜ Vuoto / Da verificare
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVerificaEfficacia("SI")}
+                  className={`flex-1 py-1.5 px-3 text-center border rounded text-xs font-bold transition-all cursor-pointer ${
+                    verificaEfficacia === "SI" 
+                      ? "bg-rose-100 border-rose-300 text-rose-700 shadow-3xs" 
+                      : "bg-white border-slate-200 text-slate-500 hover:text-rose-600"
+                  }`}
+                >
+                  ⚠️ Sì (Riverificato)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVerificaEfficacia("NO")}
+                  className={`flex-1 py-1.5 px-3 text-center border rounded text-xs font-bold transition-all cursor-pointer ${
+                    verificaEfficacia === "NO" 
+                      ? "bg-emerald-100 border-emerald-300 text-emerald-700 shadow-3xs" 
+                      : "bg-white border-slate-200 text-slate-500 hover:text-emerald-600"
+                  }`}
+                >
+                  ✅ No (Efficace)
+                </button>
+              </div>
             </div>
 
             {/* Responsabile */}

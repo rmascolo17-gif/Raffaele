@@ -14,7 +14,10 @@ export const SEED_NON_CONFORMITA: NonConformita[] = [
     costo: 350.00,
     persona: "Davide Rossi",
     responsabile: "Ing. Giorgio Verdi",
-    note: "Errore di interpretazione dell'offset dell'asse Z nel software CAM."
+    note: "Errore di interpretazione dell'offset dell'asse Z nel software CAM.",
+    correzione: "Correzione firmware post-processor ed azzeramento asse Z in macchina.",
+    azione_correttiva: "Inserimento di una procedura di simulazione digitale anticollisione su Vericut obbligatoria prima del caricamento pezzo.",
+    verifica_efficacia: "NO" // No = non si è ripetuto, quindi efficace
   },
   {
     id: "nc-2",
@@ -29,7 +32,10 @@ export const SEED_NON_CONFORMITA: NonConformita[] = [
     costo: 1200.00,
     persona: "Marco Bianchi",
     responsabile: "Dr. Stefano Russo",
-    note: "L'operatore ha saltato la calibrazione finale durante il collaudo del pezzo."
+    note: "L'operatore ha saltato la calibrazione finale durante il collaudo del pezzo.",
+    correzione: "Rilavorazione del pezzo con ri-taratura software e ripetizione del collaudo con testimone del QA manager.",
+    azione_correttiva: "Sviluppo di una check-list digitale bloccante all'interno del terminale operatore.",
+    verifica_efficacia: "NO" // No = non si è ripetuto
   },
   {
     id: "nc-3",
@@ -44,7 +50,10 @@ export const SEED_NON_CONFORMITA: NonConformita[] = [
     costo: 180.00,
     persona: "Luigi Ferrari",
     responsabile: "Mario Grassi",
-    note: "La taglierina ha sbeccato il bordo perché l'inserto era a fine ciclo di vita."
+    note: "La taglierina ha sbeccato il bordo perché l'inserto era a fine ciclo di vita.",
+    correzione: "Sostituzione inserto taglierina ed eliminazione sbavature con levigatura manuale sul lotto interessato.",
+    azione_correttiva: "Implementato conta-pezzi software con blocco macchina automatico a 500 tagli.",
+    verifica_efficacia: "SI" // Sì = si è ripetuto, azione non del tutto efficace
   },
   {
     id: "nc-4",
